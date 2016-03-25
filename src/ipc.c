@@ -1,0 +1,259 @@
+/***************************************************************************/
+/*                                                                         */
+/* play.c - mruby testing                                                  */
+/* Copyright (C) 2015 Paolo Bosetti and Matteo Ragni,                      */
+/* paolo[dot]bosetti[at]unitn.it and matteo[dot]ragni[at]unitn.it          */
+/* Department of Industrial Engineering, University of Trento              */
+/*                                                                         */
+/* This library is free software.  You can redistribute it and/or          */
+/* modify it under the terms of the GNU GENERAL PUBLIC LICENSE 2.0.        */
+/*                                                                         */
+/* This library is distributed in the hope that it will be useful,         */
+/* but WITHOUT ANY WARRANTY; without even the implied warranty of          */
+/* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the           */
+/* Artistic License 2.0 for more details.                                  */
+/*                                                                         */
+/* See the file LICENSE                                                    */
+/*                                                                         */
+/***************************************************************************/
+
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/param.h>
+#include <time.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+#include "mruby.h"
+#include "mruby/variable.h"
+#include "mruby/string.h"
+#include "mruby/data.h"
+#include "mruby/class.h"
+#include "mruby/value.h"
+#include "mruby/array.h"
+#include "mruby/hash.h"
+#include "mruby/numeric.h"
+#include "mruby/compile.h"
+
+#define IV_GET(name) mrb_iv_get(mrb, self, mrb_intern_cstr(mrb, (name)))
+#define IV_SET(name, value)                                                    \
+  mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, (name)), value)
+#define MRB_IPC_ERROR (mrb_class_get(mrb, "IPCError"))
+#define DEFAULT_BUFSIZE 1024
+    
+typedef struct {
+  int readpipe[2];
+  int writepipe[2];
+  int *write_p, *read_p;
+  pid_t pid;
+} ipc_context;
+
+static void ipc_free(mrb_state *mrb, void *p) {
+  if (p != NULL) {
+    ipc_context *ipc = (ipc_context *)p;
+    if (ipc->readpipe[0]) close(ipc->readpipe[0]);
+    if (ipc->readpipe[1]) close(ipc->readpipe[1]);
+    if (ipc->writepipe[0]) close(ipc->writepipe[0]);
+    if (ipc->writepipe[1]) close(ipc->writepipe[1]);
+    mrb_free(mrb, p);
+  }
+}
+
+static struct mrb_data_type mrb_ipc_ctx_type = {"IPCContext",
+                                                   ipc_free};
+
+mrb_value mrb_ipc_init(mrb_state *mrb, mrb_value self) {
+  ipc_context *ipc;
+  ipc = mrb_calloc(mrb, 1, sizeof(ipc));
+  
+  if (pipe(ipc->writepipe) == -1) {
+    mrb_raise(mrb, MRB_IPC_ERROR, "Error creating write pipe");
+  }
+  
+  if (pipe(ipc->readpipe) == -1) {
+    mrb_raise(mrb, MRB_IPC_ERROR, "Error creating read pipe");
+  }
+
+  IV_SET("@forked", mrb_false_value());
+  IV_SET("@role", mrb_str_new_cstr(mrb, "none"));
+  IV_SET("@bufsize", mrb_fixnum_value(DEFAULT_BUFSIZE));
+  mrb_data_init(self, ipc, &mrb_ipc_ctx_type);
+  return self;
+}
+
+mrb_value mrb_ipc_fork(mrb_state *mrb, mrb_value self) {
+  ipc_context *ipc;
+  if (mrb_test(IV_GET("@forked"))) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "Already forked!");
+  }
+  ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
+  
+  ipc->pid = fork();
+  if (ipc->pid < 0) {
+    mrb_raise(mrb, MRB_IPC_ERROR, "Can't fork!");
+  }
+  // if (ipc->pid == 0) { // Child
+  //   mrb_funcall(mrb, self, "as_child", 0);
+  // }
+  // else { // Parent
+  //   mrb_funcall(mrb, self, "as_parent", 0);
+  // }
+  IV_SET("@forked", mrb_true_value());
+  return mrb_fixnum_value(ipc->pid);
+}
+
+mrb_value mrb_ipc_is_forked(mrb_state *mrb, mrb_value self) {
+  return IV_GET("@forked");
+}
+
+
+// read end is parent[0], write end is parent[1]
+mrb_value mrb_ipc_as_child(mrb_state *mrb, mrb_value self) {
+  ipc_context *ipc;
+  if (! mrb_test(IV_GET("@forked"))) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "Not yet forked!");
+  }
+  if (mrb_eql(mrb, IV_GET("@role"), mrb_str_new_cstr(mrb, "child"))) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "I am child already!");
+  }
+  ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
+  close(ipc->readpipe[1]);
+  ipc->readpipe[1] = 0;
+  close(ipc->writepipe[0]);
+  ipc->writepipe[0] = 0;
+  ipc->write_p = &ipc->writepipe[1];
+  ipc->read_p = &ipc->readpipe[0];
+  fcntl(*ipc->read_p, F_SETFL, O_NONBLOCK);
+  fcntl(*ipc->write_p, F_SETFL, O_NONBLOCK);
+  IV_SET("@role", mrb_str_new_cstr(mrb, "child"));
+  return mrb_nil_value();
+}
+
+mrb_value mrb_ipc_as_parent(mrb_state *mrb, mrb_value self) {
+  ipc_context *ipc;
+  if (! mrb_test(IV_GET("@forked"))) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "Not yet forked!");
+  }
+  if (mrb_eql(mrb, IV_GET("@role"), mrb_str_new_cstr(mrb, "parent"))) {
+    mrb_raise(mrb, E_RUNTIME_ERROR, "I am parent already!");
+  }
+  ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
+  close(ipc->readpipe[0]);
+  ipc->readpipe[0] = 0;
+  close(ipc->writepipe[1]);
+  ipc->writepipe[1] = 0;
+  ipc->write_p = &ipc->readpipe[1];
+  ipc->read_p = &ipc->writepipe[0];
+  fcntl(*ipc->read_p, F_SETFL, O_NONBLOCK);
+  fcntl(*ipc->write_p, F_SETFL, O_NONBLOCK);
+  IV_SET("@role", mrb_str_new_cstr(mrb, "parent"));
+  return mrb_nil_value();
+}
+
+mrb_value mrb_ipc_fdes(mrb_state *mrb, mrb_value self) {
+  ipc_context *ipc;
+  mrb_value result;
+  ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
+  result = mrb_ary_new(mrb);
+  mrb_ary_push(mrb, result, mrb_fixnum_value(ipc->writepipe[0]));
+  mrb_ary_push(mrb, result, mrb_fixnum_value(ipc->writepipe[1]));
+  mrb_ary_push(mrb, result, mrb_fixnum_value(ipc->readpipe[0]));
+  mrb_ary_push(mrb, result, mrb_fixnum_value(ipc->readpipe[1]));
+  return result;
+}
+
+mrb_value mrb_ipc_readpipe(mrb_state *mrb, mrb_value self) {
+  ipc_context *ipc;
+  ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
+  return mrb_fixnum_value(*ipc->read_p);
+}
+
+mrb_value mrb_ipc_writepipe(mrb_state *mrb, mrb_value self) {
+  ipc_context *ipc;
+  ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
+  return mrb_fixnum_value(*ipc->write_p);
+}
+
+mrb_value mrb_ipc_pid(mrb_state *mrb, mrb_value self) {
+  ipc_context *ipc;
+  ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
+  return mrb_fixnum_value(ipc->pid);
+}
+
+mrb_value mrb_ipc_send(mrb_state *mrb, mrb_value self) {
+  ipc_context *ipc;
+  const char *data = NULL;
+  mrb_int len;
+  mrb_get_args(mrb, "s", &data, &len);
+  ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
+  while (1) {
+    if (write(*ipc->write_p, data, len) >= 0) {
+      break;
+    }
+    else if (errno == EAGAIN) {
+      continue;
+    }
+    else {
+      perror("Write error:");
+      mrb_raise(mrb, E_RUNTIME_ERROR, "Error writing to pipe");
+    }
+  }
+  return mrb_fixnum_value(len);
+}
+
+mrb_value mrb_ipc_receive(mrb_state *mrb, mrb_value self) {
+  ipc_context *ipc;
+  mrb_int bufsize, res;
+  mrb_value result;
+  char *data;
+  
+  bufsize = mrb_int(mrb, IV_GET("@bufsize"));
+  if (bufsize == 0 || bufsize > 65536)
+    bufsize = DEFAULT_BUFSIZE;
+  
+  data   = mrb_calloc(mrb, bufsize, sizeof(char));
+  result = mrb_str_buf_new(mrb, bufsize);  
+  ipc    = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
+
+  while (1) {
+    if ((res = read(*ipc->read_p, data, bufsize)) > 0) {
+      mrb_str_cat(mrb, result, data, res);
+      if (res < bufsize) break;
+      continue;
+    }
+    else if (errno == EAGAIN) {
+      result = mrb_nil_value();
+      break;
+    }
+    else {
+      perror("Read error:");
+      mrb_raise(mrb, E_RUNTIME_ERROR, "Error reading from pipe");
+    }
+  }
+  mrb_free(mrb, data);
+  return result;
+}
+
+void mrb_mruby_ipc_gem_init(mrb_state *mrb) {
+  struct RClass *ipc;
+
+  ipc = mrb_define_class(mrb, "IPC", mrb->object_class);
+  MRB_SET_INSTANCE_TT(ipc, MRB_TT_DATA);
+  mrb_define_method(mrb, ipc, "initialize", mrb_ipc_init, MRB_ARGS_REQ(2));
+  mrb_define_method(mrb, ipc, "as_child", mrb_ipc_as_child, MRB_ARGS_NONE());
+  mrb_define_method(mrb, ipc, "as_parent", mrb_ipc_as_parent, MRB_ARGS_NONE());
+  mrb_define_method(mrb, ipc, "fork", mrb_ipc_fork, MRB_ARGS_NONE());
+  mrb_define_method(mrb, ipc, "forked?", mrb_ipc_is_forked, MRB_ARGS_NONE());
+  mrb_define_method(mrb, ipc, "descriptors", mrb_ipc_fdes, MRB_ARGS_NONE());
+  mrb_define_method(mrb, ipc, "writepipe", mrb_ipc_writepipe, MRB_ARGS_NONE());
+  mrb_define_method(mrb, ipc, "readpipe", mrb_ipc_readpipe, MRB_ARGS_NONE());
+  mrb_define_method(mrb, ipc, "pid", mrb_ipc_pid, MRB_ARGS_NONE());
+  mrb_define_method(mrb, ipc, "send", mrb_ipc_send, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, ipc, "receive", mrb_ipc_receive, MRB_ARGS_OPT(1));
+}
+
+void mrb_mruby_ipc_gem_final(mrb_state *mrb) {}
