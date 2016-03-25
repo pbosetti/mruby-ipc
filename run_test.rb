@@ -18,8 +18,9 @@ MRuby::Build.new do |conf|
   conf.linker.library_paths << "/usr/local/lib"
   
   conf.gembox 'default'
-  conf.gem :github => 'pbosetti/mruby-yaml', :branch => 'master'
-  conf.gem :github => 'pbosetti/mruby-sleep', :branch => 'master'
-  conf.gem :github => 'pbosetti/mruby-pcre-regexp',         :branch => 'master'
+  conf.gem :github => 'pbosetti/mruby-yaml',        :branch => 'master'
+  conf.gem :github => 'pbosetti/mruby-sleep',       :branch => 'master'
+  conf.gem :github => 'pbosetti/mruby-pcre-regexp', :branch => 'master'
+  conf.gem :github => 'pbosetti/mruby-colorize',    :branch => 'master'
   conf.gem File.dirname(__FILE__)
 end

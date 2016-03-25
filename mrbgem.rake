@@ -6,6 +6,9 @@ MRuby::Gem::Specification.new('mruby-ipc') do |spec|
   spec.version = 0.1
   spec.description = spec.summary
   spec.homepage = "Not yet defined"
+  spec.add_dependency('mruby-pcre-regexp', '>= 0.0.0')
+  spec.add_dependency('mruby-colorize', '>= 1.0.0')
+  spec.add_dependency('mruby-sleep', '>= 0.0.0')
   
   if not build.kind_of? MRuby::CrossBuild then
     spec.cc.command = 'gcc' # clang does not work!

@@ -1,3 +1,2 @@
-# mruby-play
-Playground for testing mruby gems thechniques. Pretty useless, indeed.
-
+# mruby-ipc
+IPC facility based on fork and pipes.
