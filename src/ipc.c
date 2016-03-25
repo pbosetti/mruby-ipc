@@ -43,6 +43,7 @@
 #define IV_SET(name, value)                                                    \
   mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, (name)), value)
 #define MRB_IPC_ERROR (mrb_class_get(mrb, "IPCError"))
+#define MRB_IPC_PIPE_ERROR (mrb_class_get(mrb, "IPCPipeError"))
 #define DEFAULT_BUFSIZE 1024
     
 typedef struct {
@@ -198,8 +199,7 @@ mrb_value mrb_ipc_send(mrb_state *mrb, mrb_value self) {
       continue;
     }
     else {
-      perror("Write error:");
-      mrb_raise(mrb, E_RUNTIME_ERROR, "Error writing to pipe");
+      mrb_raise(mrb, MRB_IPC_PIPE_ERROR, "Error writing to pipe (closed?)");
     }
   }
   return mrb_fixnum_value(len);
@@ -230,8 +230,7 @@ mrb_value mrb_ipc_receive(mrb_state *mrb, mrb_value self) {
       break;
     }
     else {
-      perror("Read error:");
-      mrb_raise(mrb, E_RUNTIME_ERROR, "Error reading from pipe");
+      mrb_raise(mrb, MRB_IPC_PIPE_ERROR, "Timeout reading from pipe (closed?)");
     }
   }
   mrb_free(mrb, data);

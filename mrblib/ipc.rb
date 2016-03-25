@@ -17,6 +17,9 @@
 #                                                                         #
 #*************************************************************************#
 
+class IPCError; end
+class IPCPipeError < IPCError; end
+
 class IPC
   attr_reader :role, :forked, :bufsize
   
