@@ -22,6 +22,13 @@ class IPCPipeError < IPCError; end
 
 class IPC
   attr_reader :role, :forked, :bufsize
+  attr_accessor :separator
+  
+  def self.fork
+    ipc = self.new
+    ipc.full_fork
+    return self
+  end
   
   def bufsize=(v)
     raise ArgumentError unless v.kind_of? Numeric
@@ -49,6 +56,22 @@ class IPC
   def inspect
     s = self.to_s[0..-2]
     s += " @pid=#{self.pid} @role=#{self.role} @writepipe=#{self.writepipe}, @readpipe=#{self.readpipe} @bufsize=#{@bufsize}>"
+  end
+  
+  def send_with_sep(str, sep=@separator)
+    raise ArgumentError, "Separator must be a String" unless sep.kind_of? String
+    self.send(str + sep)
+  end
+  
+  def receive_to_sep(sep=@separator)
+    result = ""
+    while(true) do
+      t = self.receive(sep.length)
+      next unless t
+      break if t == sep
+      result << t
+    end
+    return result
   end
   
   def message(s)

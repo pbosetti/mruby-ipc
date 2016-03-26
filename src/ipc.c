@@ -81,6 +81,7 @@ mrb_value mrb_ipc_init(mrb_state *mrb, mrb_value self) {
 
   IV_SET("@forked", mrb_false_value());
   IV_SET("@role", mrb_str_new_cstr(mrb, "none"));
+  IV_SET("@separator", mrb_str_new_cstr(mrb, "\n"));
   IV_SET("@bufsize", mrb_fixnum_value(DEFAULT_BUFSIZE));
   mrb_data_init(self, ipc, &mrb_ipc_ctx_type);
   return self;
@@ -129,7 +130,7 @@ mrb_value mrb_ipc_as_child(mrb_state *mrb, mrb_value self) {
   ipc->write_p = &ipc->writepipe[1];
   ipc->read_p = &ipc->readpipe[0];
   fcntl(*ipc->read_p, F_SETFL, O_NONBLOCK);
-  fcntl(*ipc->write_p, F_SETFL, O_NONBLOCK);
+  // fcntl(*ipc->write_p, F_SETFL, O_NONBLOCK);
   IV_SET("@role", mrb_str_new_cstr(mrb, "child"));
   return mrb_nil_value();
 }
@@ -150,7 +151,7 @@ mrb_value mrb_ipc_as_parent(mrb_state *mrb, mrb_value self) {
   ipc->write_p = &ipc->readpipe[1];
   ipc->read_p = &ipc->writepipe[0];
   fcntl(*ipc->read_p, F_SETFL, O_NONBLOCK);
-  fcntl(*ipc->write_p, F_SETFL, O_NONBLOCK);
+  // fcntl(*ipc->write_p, F_SETFL, O_NONBLOCK);
   IV_SET("@role", mrb_str_new_cstr(mrb, "parent"));
   return mrb_nil_value();
 }
@@ -211,27 +212,22 @@ mrb_value mrb_ipc_receive(mrb_state *mrb, mrb_value self) {
   mrb_value result;
   char *data;
   
-  bufsize = mrb_int(mrb, IV_GET("@bufsize"));
-  if (bufsize == 0 || bufsize > 65536)
-    bufsize = DEFAULT_BUFSIZE;
-  
+  if (mrb_get_args(mrb, "|i", &bufsize) != 1) {
+    bufsize = mrb_int(mrb, IV_GET("@bufsize"));
+  }
+
   data   = mrb_calloc(mrb, bufsize, sizeof(char));
-  result = mrb_str_buf_new(mrb, bufsize);  
+  result = mrb_str_new_cstr(mrb, "");  
   ipc    = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
 
-  while (1) {
-    if ((res = read(*ipc->read_p, data, bufsize)) > 0) {
-      mrb_str_cat(mrb, result, data, res);
-      if (res < bufsize) break;
-      continue;
-    }
-    else if (errno == EAGAIN) {
-      result = mrb_nil_value();
-      break;
-    }
-    else {
-      mrb_raise(mrb, MRB_IPC_PIPE_ERROR, "Timeout reading from pipe (closed?)");
-    }
+  if ((res = read(*ipc->read_p, data, bufsize)) > 0) {
+    result = mrb_str_new_cstr(mrb, data);
+  }
+  else if (errno == EAGAIN) {
+    result = mrb_nil_value();
+  }
+  else {
+    mrb_raise(mrb, MRB_IPC_PIPE_ERROR, "Timeout reading from pipe (closed?)");
   }
   mrb_free(mrb, data);
   return result;

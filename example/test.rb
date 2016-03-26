@@ -8,12 +8,15 @@ if ipc.child? then # CHILD PROCESS
   ipc.message "I am the #{ipc.role}"
   ipc.message "ipc: #{ipc.inspect}"
 
-  1000.times do |i|
-    n = ipc.send "prova #{i} "
+  20.times do |i|
+    n = ipc.send_with_sep "prova #{i}"
     ipc.message "[#{i}] wrote #{n} bytes to pipe #{ipc.writepipe}"
     sleep 0.05
   end
-  ipc.send "stop"
+  ipc.send_with_sep "stop"
+  sleep 1
+  ipc.send_with_sep "one at a time$"
+  sleep 2
   ipc.message "#{ipc.role} exiting"
 
 
@@ -26,14 +29,16 @@ else # PARENT PROCESS
   i = 0
   while (true)
     begin
-      msg = ipc.receive
+      msg = ipc.receive_to_sep
     rescue IPCPipeError
       ipc.message "pipe closed"
       break
     end
-    ipc.message "Got: '#{msg}'" if msg
-    break if msg == "stop"
+    if msg then
+      ipc.message "Got: '#{msg}'" 
+      break if msg == "stop"
+    end
   end
-  sleep 1
+  #ipc.message ipc.receive_to_sep
   ipc.message "#{ipc.role} exiting"
 end
