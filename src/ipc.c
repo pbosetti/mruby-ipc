@@ -83,6 +83,7 @@ mrb_value mrb_ipc_init(mrb_state *mrb, mrb_value self) {
   IV_SET("@role", mrb_str_new_cstr(mrb, "none"));
   IV_SET("@separator", mrb_str_new_cstr(mrb, "\n"));
   IV_SET("@bufsize", mrb_fixnum_value(DEFAULT_BUFSIZE));
+  IV_SET("@last_message", mrb_nil_value());
   mrb_data_init(self, ipc, &mrb_ipc_ctx_type);
   return self;
 }
@@ -230,6 +231,7 @@ mrb_value mrb_ipc_receive(mrb_state *mrb, mrb_value self) {
     mrb_raise(mrb, MRB_IPC_PIPE_ERROR, "Timeout reading from pipe (closed?)");
   }
   mrb_free(mrb, data);
+  IV_SET("@last_message", result);
   return result;
 }
 

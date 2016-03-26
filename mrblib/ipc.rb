@@ -21,7 +21,7 @@ class IPCError; end
 class IPCPipeError < IPCError; end
 
 class IPC
-  attr_reader :role, :forked, :bufsize
+  attr_reader :role, :forked, :bufsize, :last_message
   attr_accessor :separator
   
   def self.fork
@@ -71,6 +71,7 @@ class IPC
       break if t == sep
       result << t
     end
+    @last_message = result
     return result
   end
   
