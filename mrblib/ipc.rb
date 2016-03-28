@@ -17,7 +17,7 @@
 #                                                                         #
 #*************************************************************************#
 
-class IPCError; end
+class IPCError < Exception; end
 class IPCPipeError < IPCError; end
 
 class IPC
@@ -68,8 +68,9 @@ class IPC
     while(true) do
       t = self.receive(sep.length)
       next unless t
+      puts "'#{t}'" if t.length > 1
       break if t == sep
-      result << t
+      result << t[0..sep.length]
     end
     @last_message = result
     return result
