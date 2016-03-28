@@ -32,7 +32,7 @@ class IPC
   
   def bufsize=(v)
     raise ArgumentError unless v.kind_of? Numeric
-    raise ArgumentError unless (0..65536).include? v.to_i 
+    raise ArgumentError unless (1..65535).include? v.to_i 
     @bufsize = v
   end
   
