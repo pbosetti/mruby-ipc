@@ -66,14 +66,13 @@ class IPC
   def receive_to_sep(sep=@separator)
     result = ""
     while(true) do
-      t = self.receive(sep.length)
+      t = self.receive(1)
       next unless t
-      puts "'#{t}'" if t.length > 1
-      break if t == sep
-      result << t[0..sep.length]
+      result << t
+      break if result[-sep.length..-1] == sep
     end
-    @last_message = result
-    return result
+    @last_message = result[0...-sep.length]
+    return @last_message
   end
   
   def message(s)

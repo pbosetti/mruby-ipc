@@ -14,6 +14,7 @@ if ipc.child? then # CHILD PROCESS
     sleep 0.05
   end
   ipc.send_with_sep "stop"
+  ipc.send_with_sep YAML.dump({a:1, b:2, c:3}), "$"
   ipc.message "#{ipc.role} exiting"
 
 
@@ -36,5 +37,6 @@ else # PARENT PROCESS
       break if msg == "stop"
     end
   end
+  ipc.message YAML.load(ipc.receive_to_sep "$").inspect
   ipc.message "#{ipc.role} exiting"
 end
