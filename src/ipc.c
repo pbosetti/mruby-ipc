@@ -39,13 +39,11 @@
 #include "mruby/numeric.h"
 #include "mruby/compile.h"
 
-#define IV_GET(name) mrb_iv_get(mrb, self, mrb_intern_cstr(mrb, (name)))
-#define IV_SET(name, value)                                                    \
-  mrb_iv_set(mrb, self, mrb_intern_cstr(mrb, (name)), value)
 #define MRB_IPC_ERROR (mrb_class_get(mrb, "IPCError"))
 #define MRB_IPC_PIPE_ERROR (mrb_class_get(mrb, "IPCPipeError"))
 #define DEFAULT_BUFSIZE 1024
-    
+#define CHECK   printf(">>> check %d\n", __LINE__)
+
 typedef struct {
   int readpipe[2];
   int writepipe[2];
@@ -66,7 +64,7 @@ static void ipc_free(mrb_state *mrb, void *p) {
 
 static struct mrb_data_type mrb_ipc_ctx_type = {"IPCContext", ipc_free};
 
-mrb_value mrb_ipc_init(mrb_state *mrb, mrb_value self) {
+static mrb_value mrb_ipc_init(mrb_state *mrb, mrb_value self) {
   ipc_context *ipc;
   ipc = mrb_calloc(mrb, 1, sizeof(ipc));
   
@@ -80,18 +78,19 @@ mrb_value mrb_ipc_init(mrb_state *mrb, mrb_value self) {
     mrb_raisef(mrb, MRB_IPC_ERROR, "Error creating read pipe: %S", err_desc);
   }
 
-  IV_SET("@forked", mrb_false_value());
-  IV_SET("@role", mrb_str_new_cstr(mrb, "none"));
-  IV_SET("@separator", mrb_str_new_cstr(mrb, "\n"));
-  IV_SET("@bufsize", mrb_fixnum_value(DEFAULT_BUFSIZE));
-  IV_SET("@last_message", mrb_nil_value());
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@forked"), mrb_false_value());
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@role"), mrb_str_new_cstr(mrb, "none"));
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@separator"), mrb_str_new_cstr(mrb, "\n"));
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@bufsize"), mrb_fixnum_value(DEFAULT_BUFSIZE));
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@last_message"), mrb_nil_value());
   mrb_data_init(self, ipc, &mrb_ipc_ctx_type);
   return self;
 }
 
-mrb_value mrb_ipc_fork(mrb_state *mrb, mrb_value self) {
+static mrb_value mrb_ipc_fork(mrb_state *mrb, mrb_value self) {
   ipc_context *ipc;
-  if (mrb_test(IV_GET("@forked"))) {
+  mrb_value forked = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@forked"));
+  if (mrb_test(forked)) {
     mrb_raise(mrb, MRB_IPC_ERROR, "Already forked!");
   }
   ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
@@ -101,22 +100,24 @@ mrb_value mrb_ipc_fork(mrb_state *mrb, mrb_value self) {
     mrb_value err_desc = mrb_str_new_cstr(mrb, strerror(errno));
     mrb_raisef(mrb, MRB_IPC_ERROR, "Can't fork: %S", err_desc);
   }
-  IV_SET("@forked", mrb_true_value());
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@forked"), mrb_true_value());
   return mrb_fixnum_value(ipc->pid);
 }
 
 mrb_value mrb_ipc_is_forked(mrb_state *mrb, mrb_value self) {
-  return IV_GET("@forked");
+  return mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@forked"));
 }
 
 
 // read end is parent[0], write end is parent[1]
-mrb_value mrb_ipc_as_child(mrb_state *mrb, mrb_value self) {
+static mrb_value mrb_ipc_as_child(mrb_state *mrb, mrb_value self) {
   ipc_context *ipc;
-  if (! mrb_test(IV_GET("@forked"))) {
+  mrb_value forked = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@forked"));
+  mrb_value role = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@role"));
+  if (! mrb_test(forked)) {
     mrb_raise(mrb, MRB_IPC_ERROR, "Not yet forked!");
   }
-  if (mrb_eql(mrb, IV_GET("@role"), mrb_str_new_cstr(mrb, "child"))) {
+  if (mrb_eql(mrb, role, mrb_str_new_cstr(mrb, "child"))) {
     mrb_raise(mrb, MRB_IPC_ERROR, "I am child already!");
   }
   ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
@@ -127,16 +128,18 @@ mrb_value mrb_ipc_as_child(mrb_state *mrb, mrb_value self) {
   ipc->write_p = &ipc->writepipe[1];
   ipc->read_p = &ipc->readpipe[0];
   fcntl(*ipc->read_p, F_SETFL, O_NONBLOCK);
-  IV_SET("@role", mrb_str_new_cstr(mrb, "child"));
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@role"), mrb_str_new_cstr(mrb, "child"));
   return mrb_nil_value();
 }
 
-mrb_value mrb_ipc_as_parent(mrb_state *mrb, mrb_value self) {
+static mrb_value mrb_ipc_as_parent(mrb_state *mrb, mrb_value self) {
   ipc_context *ipc;
-  if (! mrb_test(IV_GET("@forked"))) {
+  mrb_value forked = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@forked"));
+  mrb_value role = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@role"));
+  if (! mrb_test(forked)) {
     mrb_raise(mrb, MRB_IPC_ERROR, "Not yet forked!");
   }
-  if (mrb_eql(mrb, IV_GET("@role"), mrb_str_new_cstr(mrb, "parent"))) {
+  if (mrb_eql(mrb, role, mrb_str_new_cstr(mrb, "parent"))) {
     mrb_raise(mrb, MRB_IPC_ERROR, "I am parent already!");
   }
   ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
@@ -147,11 +150,11 @@ mrb_value mrb_ipc_as_parent(mrb_state *mrb, mrb_value self) {
   ipc->write_p = &ipc->readpipe[1];
   ipc->read_p = &ipc->writepipe[0];
   fcntl(*ipc->read_p, F_SETFL, O_NONBLOCK);
-  IV_SET("@role", mrb_str_new_cstr(mrb, "parent"));
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@role"), mrb_str_new_cstr(mrb, "parent"));
   return mrb_nil_value();
 }
 
-mrb_value mrb_ipc_fdes(mrb_state *mrb, mrb_value self) {
+static mrb_value mrb_ipc_fdes(mrb_state *mrb, mrb_value self) {
   ipc_context *ipc;
   mrb_value result;
   ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
@@ -163,27 +166,27 @@ mrb_value mrb_ipc_fdes(mrb_state *mrb, mrb_value self) {
   return result;
 }
 
-mrb_value mrb_ipc_readpipe(mrb_state *mrb, mrb_value self) {
+static mrb_value mrb_ipc_readpipe(mrb_state *mrb, mrb_value self) {
   ipc_context *ipc;
   ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
   return mrb_fixnum_value(*ipc->read_p);
 }
 
-mrb_value mrb_ipc_writepipe(mrb_state *mrb, mrb_value self) {
+static mrb_value mrb_ipc_writepipe(mrb_state *mrb, mrb_value self) {
   ipc_context *ipc;
   ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
   return mrb_fixnum_value(*ipc->write_p);
 }
 
-mrb_value mrb_ipc_pid(mrb_state *mrb, mrb_value self) {
+static mrb_value mrb_ipc_pid(mrb_state *mrb, mrb_value self) {
   ipc_context *ipc;
   ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
   return mrb_fixnum_value(ipc->pid);
 }
 
-mrb_value mrb_ipc_send(mrb_state *mrb, mrb_value self) {
+static mrb_value mrb_ipc_send(mrb_state *mrb, mrb_value self) {
   ipc_context *ipc;
-  const char *data = NULL;
+  char *data = NULL;
   mrb_int len;
   mrb_get_args(mrb, "s", &data, &len);
   ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
@@ -199,22 +202,22 @@ mrb_value mrb_ipc_send(mrb_state *mrb, mrb_value self) {
   return mrb_fixnum_value(len);
 }
 
-mrb_value mrb_ipc_receive(mrb_state *mrb, mrb_value self) {
+static mrb_value mrb_ipc_receive(mrb_state *mrb, mrb_value self) {
   ipc_context *ipc;
   mrb_int bufsize, res;
   mrb_value result;
   char *data;
   
   if (mrb_get_args(mrb, "|i", &bufsize) != 1) {
-    bufsize = mrb_int(mrb, IV_GET("@bufsize"));
+    bufsize = mrb_int(mrb, mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@bufsize")));
   }
 
-  data   = mrb_calloc(mrb, bufsize, sizeof(char));
-  result = mrb_str_buf_new(mrb, bufsize);  
+  data   = calloc(bufsize, sizeof(char));
+  result = mrb_str_buf_new(mrb, bufsize);
   ipc    = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
 
   if ((res = read(*ipc->read_p, data, bufsize)) > 0) {
-    result = mrb_str_new_cstr(mrb, data);
+    result = mrb_str_cat(mrb, result, data, bufsize);
   }
   else if (errno == EAGAIN) {
     result = mrb_nil_value();
@@ -223,12 +226,12 @@ mrb_value mrb_ipc_receive(mrb_state *mrb, mrb_value self) {
     mrb_value err_desc = mrb_str_new_cstr(mrb, strerror(errno));
     mrb_raisef(mrb, MRB_IPC_PIPE_ERROR, "Error reading from pipe: %S", err_desc);
   }
-  mrb_free(mrb, data);
-  IV_SET("@last_message", result);
+  free(data);
+  mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@last_message"), result);
   return result;
 }
 
-mrb_value mrb_ipc_close(mrb_state *mrb, mrb_value self) {
+static mrb_value mrb_ipc_close(mrb_state *mrb, mrb_value self) {
   ipc_context *ipc;
   ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
   close(*ipc->read_p);

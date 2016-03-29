@@ -1,29 +1,30 @@
 
 ipc = IPC.new()
-# ipc.bufsize = 5
-ipc.message "Forking..."
+y = {c:1}
+ipc.message "#{y} Forking..."
 ipc.full_fork
-
+# IPC.fork do |ipc|
+puts({c:10})
 if ipc.child? then # CHILD PROCESS
   ipc.message "I am the #{ipc.role}"
   ipc.message "ipc: #{ipc.inspect}"
 
-  50.times do |i|
+  10.times do |i|
     n = ipc.send_with_sep "prova #{i}"
     ipc.message "[#{i}] wrote #{n} bytes to pipe #{ipc.writepipe}"
     sleep 0.05
   end
   ipc.send_with_sep "stop"
-  y = YAML.dump({"one" => 1, "two" => 2, "name" =>%W(Paolo Bosetti)})
+  y = {"one" => 1, "two" => 2, "d" =>%W(Paolo Bosetti), :c => "test"}
   ipc.message y.inspect
-  ipc.send_with_sep y, "$$"
+  ipc.send_with_sep YAML.dump(y), "$$"
   ipc.message "#{ipc.role} exiting"
 
 
 else # PARENT PROCESS
   ipc.message "I am the #{ipc.role}"
   ipc.message "ipc: #{ipc.inspect}"
-  
+
   sleep 0.1
   ipc.message "reading from #{ipc.readpipe}"
   i = 0
@@ -44,3 +45,5 @@ else # PARENT PROCESS
   ipc.message YAML.load(y).inspect
   ipc.message "#{ipc.role} exiting"
 end
+
+# end

@@ -27,7 +27,12 @@ class IPC
   def self.fork
     ipc = self.new
     ipc.full_fork
-    return self
+    if block_given? then
+      yield ipc
+      return nil
+    else
+      return ipc
+    end
   end
   
   def bufsize=(v)
