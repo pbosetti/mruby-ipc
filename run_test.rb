@@ -11,7 +11,7 @@ if __FILE__ == $PROGRAM_NAME
 end
 
 MRuby::Build.new do |conf|
-  toolchain :clang
+  toolchain :gcc
   #conf.cc.flags += %w(-fexceptions -Wno-deprecated-declarations)
   conf.cc.defines += %w(ENABLE_READLINE)
   conf.cc.include_paths << "/usr/local/include"

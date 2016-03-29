@@ -45,10 +45,10 @@
 #define CHECK   printf(">>> check %d\n", __LINE__)
 
 typedef struct {
+  pid_t pid;
   int readpipe[2];
   int writepipe[2];
   int *write_p, *read_p;
-  pid_t pid;
 } ipc_context;
 
 static void ipc_free(mrb_state *mrb, void *p) {
@@ -58,26 +58,28 @@ static void ipc_free(mrb_state *mrb, void *p) {
     if (ipc->readpipe[1]) close(ipc->readpipe[1]);
     if (ipc->writepipe[0]) close(ipc->writepipe[0]);
     if (ipc->writepipe[1]) close(ipc->writepipe[1]);
-    mrb_free(mrb, p);
+    free(p);
   }
 }
 
-static struct mrb_data_type mrb_ipc_ctx_type = {"IPCContext", ipc_free};
+static struct mrb_data_type mrb_ipc_ctx_type = {"IPC", ipc_free};
 
 static mrb_value mrb_ipc_init(mrb_state *mrb, mrb_value self) {
   ipc_context *ipc;
-  ipc = mrb_calloc(mrb, 1, sizeof(ipc));
-  
+  ipc = (ipc_context *)calloc(1, sizeof(ipc_context));
+  mrb_data_init(self, NULL, &mrb_ipc_ctx_type);
+
+  ipc->pid = 0;
   if (pipe(ipc->writepipe) == -1) {
     mrb_value err_desc = mrb_str_new_cstr(mrb, strerror(errno));
     mrb_raisef(mrb, MRB_IPC_ERROR, "Error creating write pipe: %S", err_desc);
   }
-  
+
   if (pipe(ipc->readpipe) == -1) {
     mrb_value err_desc = mrb_str_new_cstr(mrb, strerror(errno));
     mrb_raisef(mrb, MRB_IPC_ERROR, "Error creating read pipe: %S", err_desc);
   }
-
+  
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@forked"), mrb_false_value());
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@role"), mrb_str_new_cstr(mrb, "none"));
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@separator"), mrb_str_new_cstr(mrb, "\n"));
@@ -126,7 +128,7 @@ static mrb_value mrb_ipc_as_child(mrb_state *mrb, mrb_value self) {
   close(ipc->writepipe[0]);
   ipc->writepipe[0] = 0;
   ipc->write_p = &ipc->writepipe[1];
-  ipc->read_p = &ipc->readpipe[0];
+  ipc->read_p  = &ipc->readpipe[0];
   fcntl(*ipc->read_p, F_SETFL, O_NONBLOCK);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@role"), mrb_str_new_cstr(mrb, "child"));
   return mrb_nil_value();
@@ -148,7 +150,7 @@ static mrb_value mrb_ipc_as_parent(mrb_state *mrb, mrb_value self) {
   close(ipc->writepipe[1]);
   ipc->writepipe[1] = 0;
   ipc->write_p = &ipc->readpipe[1];
-  ipc->read_p = &ipc->writepipe[0];
+  ipc->read_p  = &ipc->writepipe[0];
   fcntl(*ipc->read_p, F_SETFL, O_NONBLOCK);
   mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@role"), mrb_str_new_cstr(mrb, "parent"));
   return mrb_nil_value();

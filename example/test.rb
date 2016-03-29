@@ -1,10 +1,10 @@
 
-ipc = IPC.new()
-y = {c:1}
-ipc.message "#{y} Forking..."
-ipc.full_fork
-# IPC.fork do |ipc|
-puts({c:10})
+# ipc = IPC.new()
+# ipc.message "Forking..."
+# ipc.full_fork
+
+IPC.fork do |ipc|
+
 if ipc.child? then # CHILD PROCESS
   ipc.message "I am the #{ipc.role}"
   ipc.message "ipc: #{ipc.inspect}"
@@ -18,7 +18,6 @@ if ipc.child? then # CHILD PROCESS
   y = {"one" => 1, "two" => 2, "d" =>%W(Paolo Bosetti), :c => "test"}
   ipc.message y.inspect
   ipc.send_with_sep YAML.dump(y), "$$"
-  ipc.message "#{ipc.role} exiting"
 
 
 else # PARENT PROCESS
@@ -36,14 +35,14 @@ else # PARENT PROCESS
       break
     end
     if msg then
-      ipc.message "Got: '#{msg}'" 
+      ipc.message "Got: '#{msg}'"
       break if msg == "stop"
     end
   end
   y = ipc.receive_to_sep "$$"
   ipc.message y.inspect
   ipc.message YAML.load(y).inspect
-  ipc.message "#{ipc.role} exiting"
 end
 
-# end
+ipc.message "#{ipc.role} exiting"
+end
