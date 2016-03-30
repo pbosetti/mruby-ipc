@@ -36,7 +36,10 @@ m.add idle_state
 stop_state = FSM::State.new "Stop"
 stop_state.on_enter { $ipc.message "> Entering #{self.name}"}
 stop_state.in_loop { stop_machine }
-stop_state.on_exit { $ipc.message "< Exiting #{self.name}"}
+stop_state.on_exit { 
+  $ipc.message "< Exiting #{self.name}"
+  $ipc.kill_child
+}
 m.add stop_state
 
 # STEP 3

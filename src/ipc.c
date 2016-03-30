@@ -27,6 +27,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #include "mruby.h"
 #include "mruby/variable.h"
@@ -241,6 +242,21 @@ static mrb_value mrb_ipc_close(mrb_state *mrb, mrb_value self) {
   return mrb_nil_value();
 }
 
+static mrb_value mrb_ipc_kill_child(mrb_state *mrb, mrb_value self) {
+  ipc_context *ipc;
+  mrb_value forked = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@forked"));
+  mrb_value role = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@role"));
+  if (! mrb_test(forked)) {
+    mrb_raise(mrb, MRB_IPC_ERROR, "Not yet forked!");
+  }
+  if (mrb_eql(mrb, role, mrb_str_new_cstr(mrb, "child"))) {
+    mrb_raise(mrb, MRB_IPC_ERROR, "Call this from parent!");
+  }
+  ipc = DATA_GET_PTR(mrb, self, &mrb_ipc_ctx_type, ipc_context);
+  kill(ipc->pid, SIGKILL);
+  return mrb_nil_value();
+}
+
 void mrb_mruby_ipc_gem_init(mrb_state *mrb) {
   struct RClass *ipc;
 
@@ -258,6 +274,7 @@ void mrb_mruby_ipc_gem_init(mrb_state *mrb) {
   mrb_define_method(mrb, ipc, "send", mrb_ipc_send, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, ipc, "receive", mrb_ipc_receive, MRB_ARGS_OPT(1));
   mrb_define_method(mrb, ipc, "close", mrb_ipc_close, MRB_ARGS_NONE());
+  mrb_define_method(mrb, ipc, "kill_child", mrb_ipc_kill_child, MRB_ARGS_NONE());
 }
 
 void mrb_mruby_ipc_gem_final(mrb_state *mrb) {}
