@@ -249,7 +249,6 @@ static mrb_value mrb_ipc_close(mrb_state *mrb, mrb_value self) {
 
 static mrb_value mrb_ipc_kill_child(mrb_state *mrb, mrb_value self) {
   ipc_context *ipc;
-  // mrb_value forked = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@forked"));
   mrb_value forked = MRB_IV_GET(mrb, "@forked");
   mrb_value role = MRB_IV_GET(mrb, "@role");
   if (! mrb_test(forked)) {
@@ -281,6 +280,7 @@ void mrb_mruby_ipc_gem_init(mrb_state *mrb) {
   mrb_define_method(mrb, ipc, "receive", mrb_ipc_receive, MRB_ARGS_OPT(1));
   mrb_define_method(mrb, ipc, "close", mrb_ipc_close, MRB_ARGS_NONE());
   mrb_define_method(mrb, ipc, "kill_child", mrb_ipc_kill_child, MRB_ARGS_NONE());
+ 
 }
 
 void mrb_mruby_ipc_gem_final(mrb_state *mrb) {}
