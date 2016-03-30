@@ -7,7 +7,9 @@ if __FILE__ == $PROGRAM_NAME
     system 'git clone --depth 1 https://github.com/mruby/mruby.git tmp/mruby'
   end
   system(%Q[cd tmp/mruby; MRUBY_CONFIG=#{File.expand_path __FILE__} ./minirake #{ARGV.join(' ')}])
-  exit system %Q"ln -s tmp/mruby/bin/mirb ."
+  system %Q"ln -fs tmp/mruby/bin/mirb ."
+  system %Q"ln -fs tmp/mruby/bin/mruby ."
+  exit 
 end
 
 MRuby::Build.new do |conf|
@@ -18,9 +20,15 @@ MRuby::Build.new do |conf|
   conf.linker.library_paths << "/usr/local/lib"
   
   conf.gembox 'default'
-  conf.gem :github => 'pbosetti/mruby-yaml',        :branch => 'master'
-  conf.gem :github => 'pbosetti/mruby-sleep',       :branch => 'master'
-  conf.gem :github => 'pbosetti/mruby-pcre-regexp', :branch => 'master'
-  conf.gem :github => 'pbosetti/mruby-colorize',    :branch => 'master'
+  conf.gem :github => 'pbosetti/mruby-io',                  :branch => 'master'
+  conf.gem :github => 'pbosetti/mruby-dir',                 :branch => 'master'
+  conf.gem :github => 'pbosetti/mruby-tempfile',            :branch => 'master'
+  conf.gem :github => 'pbosetti/mruby-yaml',                :branch => 'master'
+  conf.gem :github => 'pbosetti/mruby-sleep',               :branch => 'master'
+  conf.gem :github => 'pbosetti/mruby-pcre-regexp',         :branch => 'master'
+  conf.gem :github => 'pbosetti/mruby-colorize',            :branch => 'master'
+  conf.gem :github => 'pbosetti/mruby-sinatic',             :branch => 'master'
+  conf.gem :github => 'UniTN-Mechatronics/mruby-fsm',       :branch => 'master'
   conf.gem File.dirname(__FILE__)
+  conf.gem :github => 'pbosetti/mruby-emb-require',         :branch => "master"
 end
