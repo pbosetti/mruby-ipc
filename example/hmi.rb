@@ -1,7 +1,17 @@
 #!mruby
 
 get "/" do
-  "Hello, World!"
+  <<-EOH
+  <html>
+  <body>
+  <h1>HMI test</h1>
+  <a href="/step">Make a step</a>
+  <a href="/ipc.txt">Inspect IPC</a>
+  <a href="/echo?name=John&surname=Carter">Echo test</a>
+  <a href="/stop">FULL STOP</a>  
+  </body>
+  </html>
+  EOH
 end
 
 get "/step" do 
@@ -25,12 +35,12 @@ get "/options.yaml" do |r, param|
   YAML.dump(Sinatic.options)
 end
 
-get "/echo.yaml" do |r, param|
+get "/echo" do |r, param|
   YAML.dump({
     r:r,
     query:r.query,
     pairs:query(r), #Gets query string as a hash
-    param:param
+    param:Sinatic.options
     })
 end
 

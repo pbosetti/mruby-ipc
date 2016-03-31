@@ -25,10 +25,11 @@ idle_state.in_loop do
     end
   end
 
+  $ipc.message "#{Time.now.to_f} - #{m.params.inspect}"
 end
 idle_state.on_exit { $ipc.message "< Exiting #{self.name}"}
 # If needed, define a timer for the state (in seconds):
-idle_state.timing = 0.05
+idle_state.timing = 0.005
 # finally add the state to the FSM instance:
 m.add idle_state
 

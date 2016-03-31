@@ -72,7 +72,7 @@ class IPC
     result = ""
     while(true) do
       t = self.receive(1)
-      next unless t
+      return nil unless t
       result << t
       break if result[-sep.length..-1] == sep
     end
