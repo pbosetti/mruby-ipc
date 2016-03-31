@@ -20,6 +20,7 @@ end
 get "/step" do 
   bytes = $ipc.send_with_sep "ping"
   res = $ipc.receive_to_sep
+  $ipc.message "res is #{res}"
   <<-EOH
   <meta http-equiv=refresh content='3; URL=/'>
   Sent #{bytes} bytes, got #{res}

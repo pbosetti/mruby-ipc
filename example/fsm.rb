@@ -6,7 +6,10 @@ m.params.count = 0
 # Create states, giving a name (String)
 idle_state = FSM::State.new "Idle"
 # define actions for on_enter, in_loop, and on_exit (using a DSL):
-idle_state.on_enter { $ipc.message "> Entering #{self.name}"}
+idle_state.on_enter { 
+  params.count = 1
+  $ipc.message "> Entering #{self.name}"
+}
 idle_state.in_loop do
 
   begin
@@ -17,15 +20,15 @@ idle_state.in_loop do
   end
   
   if msg then
-    $ipc.message "Got: '#{msg}'"
     params.count += 1
+    $ipc.message "Got: '#{msg}', count = #{params.count}"
     $ipc.send_with_sep params.count.to_s
     if params.count > 10 or msg == "stop"
       transition_to 'Stop'
     end
   end
 
-  $ipc.message "#{Time.now.to_f} - #{m.params.inspect}"
+  warn "#{Time.now.to_f} - #{m.params.inspect}"
 end
 idle_state.on_exit { $ipc.message "< Exiting #{self.name}"}
 # If needed, define a timer for the state (in seconds):
@@ -36,7 +39,7 @@ m.add idle_state
 # Repeat for other states:
 stop_state = FSM::State.new "Stop"
 stop_state.on_enter { $ipc.message "> Entering #{self.name}"}
-stop_state.in_loop { stop_machine }
+stop_state.in_loop { $ipc.message "params: #{params.inspect}"; stop_machine }
 stop_state.on_exit { 
   $ipc.message "< Exiting #{self.name}"
   $ipc.kill_child
